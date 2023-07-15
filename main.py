@@ -7,7 +7,6 @@ import urllib.parse
 import logging
 
 
-
 def no_func():
     logging.debug("no function")
     return ""
@@ -161,21 +160,18 @@ def create_google_map_url(address):
     rval = f"{url}/{escaped_address}"
     return rval
 
+
 def get_stock_info(symbol):
     ticker = yf.Ticker(symbol).info
     return json.dumps(ticker)
-
-    market_price = ticker['currentPrice']
-    # previous_close_price = ticker['regularMarketPreviousClose']
-    return market_price
 
 
 func_dict = {
     "get_product_2numbers": get_product_2numbers,
     "no_func": no_func,
     "get_stock_info": get_stock_info,
-    "employee_info" : employee_info,
-    "create_google_map_url" : create_google_map_url
+    "employee_info": employee_info,
+    "create_google_map_url": create_google_map_url
 }
 
 function_list = [
@@ -249,14 +245,19 @@ function_list = [
 ]
 
 
-def run_conversation(prompt):
-    system_content = """You are a helpful assistant. 
-    You can answer a question with or without calling the provided functions. 
-    I repeat only use the functions if you feel they are needed because you do not have the data yourself."""
+def run_conversation():
+    system_content = """you are a helpful chatbot. 
+    your goal is to collect enough information to help the user answer a variety of questions.
+    Functions have been passed to you to help answer specific questions you do not have the data to answer yourself.
+    The first thing you should do is introduce yourself, how you can help, and list a general description of the 
+    functions and how they may be able to help you. Make this function list more human readable than just printing 
+    the function's description I passed to you. 
+    Questions can be answered with or without a function call. A combination of function calls, or a mixture of 
+    function calls and knowledge you already have. Do not call a function unless the user has provide adequate 
+    information for you to pass in correct information to the arguments.  Do not guess on the arguments."""
 
     messages = [
         {"role": "system", "content": system_content},
-        {"role": "user", "content": prompt}
     ]
 
     model = "gpt-3.5-turbo-16k-0613"
@@ -272,6 +273,9 @@ def run_conversation(prompt):
         )
         message = response["choices"][0]["message"]
 
+        # append ChatGPT's response to the chat conversation
+        messages.append(message)
+
         # Step 2, check if the model wants to call a function
         if message.get("function_call"):
             logging.info(message)
@@ -280,17 +284,41 @@ def run_conversation(prompt):
 
             arguments = json.loads(message["function_call"]["arguments"])
             logging.info(f"arguments: {arguments}")
-            function_response = func_dict[function_name](**arguments)
+            try:
+                function_response = func_dict[function_name](**arguments)
 
-            # Step 4, send model the info on the function call and function response
-            messages.append(message)
-            messages.append({
-                "role": "function",
-                "name": function_name,
-                "content": f"{function_response}",
-            })
+                # Step 4, send model the info on the function call and function response
+                messages.append({
+                    "role": "function",
+                    "name": function_name,
+                    "content": f"{function_response}",
+                })
+            except KeyError:
+                messages.append({
+                    "role": "function",
+                    "name": function_name,
+                    "content": "This function is not available.",
+                })
+            except Exception as e:
+                messages.append({
+                    "role": "function",
+                    "name": function_name,
+                    "content": f"An error occurred: {str(e)}",
+                })
         else:
-            return message["content"]
+            print(message['content'])
+            prompt = input(
+                "Ask the chatbot a question or answer their question (Type 'quit' to exit or 'reset' to start new conversation): ")
+
+            # If the user entered "quit", break out of the loop
+            if prompt.lower() == "quit":
+                exit(0)
+            elif prompt.lower() == "reset":
+                # return from this function and start over
+                return
+            else:
+                # append users reply to the conversation and send back to ChatGPT
+                messages.append({"role": "user", "content": prompt})
 
 
 def main():
@@ -299,16 +327,10 @@ def main():
 
     # Ask the user to enter a prompt
     while True:
-        prompt = input("Ask a question. (Type 'quit' to exit) ")
-
-        # If the user entered "quit", break out of the loop
-        if prompt.lower() == "quit":
-            break
-
-        print(run_conversation(prompt))
+        run_conversation()
 
 
 if __name__ == '__main__':
-    logging.basicConfig( level=logging.INFO)
+    logging.basicConfig(level=logging.INFO)
 
     main()
