@@ -15,7 +15,6 @@ setup(
     description=description,
     install_requires=[
         'openai',
-        'python-dotenv',
-        'yfinance'
+        'python-dotenv'
     ]
 )

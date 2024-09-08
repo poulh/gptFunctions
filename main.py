@@ -1,15 +1,14 @@
-import openai
+from openai import OpenAI
+
 import os
 import dotenv
 import json
-import yfinance as yf
 import urllib.parse
 import logging
 
-
 def no_func():
-    logging.debug("no function")
-    return ""
+    logging.debug('no function')
+    return ''
 
 
 def get_product_2numbers(number1, number2):
@@ -155,21 +154,15 @@ def employee_info():
 
 
 def create_google_map_url(address):
-    url = "https://www.google.com/maps/place"
+    url = 'https://www.google.com/maps/place'
     escaped_address = urllib.parse.quote(address)
     rval = f"{url}/{escaped_address}"
     return rval
 
 
-def get_stock_info(symbol):
-    ticker = yf.Ticker(symbol).info
-    return json.dumps(ticker)
-
-
 func_dict = {
     "get_product_2numbers": get_product_2numbers,
     "no_func": no_func,
-    "get_stock_info": get_stock_info,
     "employee_info": employee_info,
     "create_google_map_url": create_google_map_url
 }
@@ -192,21 +185,6 @@ function_list = [
 
             },
             "required": ["number1", "number2"]
-        }
-    },
-    {
-        "name": "get_stock_info",
-        "description": "Get any financial and fundamental data about a publicly traded corporation. Including stock prices, broker recomendations, company address",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "symbol": {
-                    "type": "string",
-                    "description": "The stock symbol of the company whose info you need",
-                }
-
-            },
-            "required": ["symbol"]
         }
     },
     {
@@ -257,73 +235,72 @@ def run_conversation():
     information for you to pass in correct information to the arguments.  Do not guess on the arguments."""
 
     messages = [
-        {"role": "system", "content": system_content},
+        {'role': 'system', 'content': system_content},
     ]
 
-    model = "gpt-3.5-turbo-16k-0613"
+    model = 'gpt-4o'
+    client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
     while True:
 
-        response = openai.ChatCompletion.create(
-            model=model,
-            messages=messages,
-            functions=function_list,
-            function_call="auto",
-            temperature=0,
-        )
-        message = response["choices"][0]["message"]
+        response = client.chat.completions.create(model=model,
+        messages=messages,
+        functions=function_list,
+        function_call='auto',
+        temperature=0)
+        message = response.choices[0].message
 
         # append ChatGPT's response to the chat conversation
         messages.append(message)
 
         # Step 2, check if the model wants to call a function
-        if message.get("function_call"):
+        if message.function_call:
             logging.info(message)
-            function_name = message["function_call"]["name"]
+            function_name = message.function_call.name
             logging.info(f"function name: {function_name}")
 
-            arguments = json.loads(message["function_call"]["arguments"])
+            arguments = json.loads(message.function_call.arguments)
             logging.info(f"arguments: {arguments}")
             try:
                 function_response = func_dict[function_name](**arguments)
 
                 # Step 4, send model the info on the function call and function response
                 messages.append({
-                    "role": "function",
-                    "name": function_name,
-                    "content": f"{function_response}",
+                    'role': 'function',
+                    'name': function_name,
+                    'content': f"{function_response}",
                 })
             except KeyError:
                 messages.append({
-                    "role": "function",
-                    "name": function_name,
-                    "content": "This function is not available.",
+                    'role': 'function',
+                    'name': function_name,
+                    'content': 'This function is not available.',
                 })
             except Exception as e:
                 messages.append({
-                    "role": "function",
-                    "name": function_name,
-                    "content": f"An error occurred: {str(e)}",
+                    'role': 'function',
+                    'name': function_name,
+                    'content': f"An error occurred: {str(e)}",
                 })
         else:
-            print(message['content'])
+            print(message.content)
             prompt = input(
                 "Ask the chatbot a question or answer their question (Type 'quit' to exit or 'reset' to start new conversation): ")
 
             # If the user entered "quit", break out of the loop
-            if prompt.lower() == "quit":
+            if prompt.lower() == 'quit':
                 exit(0)
-            elif prompt.lower() == "reset":
+            elif prompt.lower() == 'reset':
                 # return from this function and start over
                 return
             else:
                 # append users reply to the conversation and send back to ChatGPT
-                messages.append({"role": "user", "content": prompt})
+                messages.append({'role': 'user', 'content': prompt})
 
 
 def main():
     dotenv.load_dotenv()
-    openai.api_key = os.getenv("OPENAI_API_KEY")
+    logging.basicConfig(level=logging.INFO)
 
     # Ask the user to enter a prompt
     while True:
@@ -331,6 +308,4 @@ def main():
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
-
     main()
